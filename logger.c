@@ -29,11 +29,25 @@ static FILE* logging_fd = 0;
 struct s_log* log_new(log_fnc logger) {
     struct s_log* log_instance = malloc(sizeof(struct s_log));
     if(log_instance == 0) {
-        core_handle_error(255, "Fatal error, out of memory");
+        // Окей, обработка выделения памяти есть, но при ней возникает рекурсия
+        // core_error_handler -> core_instance -> log_new
+        // core_handle_error(255, "Fatal error, out of memory");
+        perror("Out of memory");
+        abort();
     }
     log_instance->log_ = logger;
-    if (logging_fd = 0) {
-        logging_fd = fopen("test.log", "rw");
+    // Присваивание в условии
+    if (logging_fd == 0) {
+        // Режим открытия файла.
+        // Блин, я с ним дольше всего провозился.
+        // Привык, режим открытия можно комбинировать: https://en.cppreference.com/w/cpp/io/basic_fstream/open
+        logging_fd = fopen("test.log", "w");
+        if (logging_fd == 0) {
+            perror("Can`t open file");
+            abort();
+        }
+        // А если файл не открылся? Например есть директория с таким именем
+        // Раз не указано в условиях что делать, то как обычно просто завали процесс. Зато ошибка будет явной.
     }
     return log_instance;
 }
@@ -48,7 +62,13 @@ struct s_error_handler {
 };
 
 struct s_error_handler* error_handler_new(error_handler_fnc handler) {
-    struct s_error_handler* handler_ = malloc(sizeof(handler));
+    // Выделяемый размер блока памяти равен размеру указателя
+    struct s_error_handler* handler_ = malloc(sizeof(struct s_error_handler));
+    // Нужна обработка ошибки выделения памяти
+    if (handler_ == 0) {
+        perror("Out of memory");
+        abort();
+    }
     handler_->handle_ = handler;
     return handler_;
 }
@@ -61,6 +81,8 @@ void logging_error_handler(int err_no, const char* msg) {
     core_log_message(log_level_error, "Message %d, %s", msg);
 }
 
+// Думаю стоит поменять местами имена handler и handle
+// handler это обработчик, не место его размещения (handle)
 struct s_core {
     struct s_error_handler* handler_;
     struct s_log* log_;
@@ -68,8 +90,17 @@ struct s_core {
 
 struct s_core* core_instance() {
     static struct s_core* core = 0;
+    // Not thread-safe, maybe need?
     if (core == 0) {
         core = malloc(sizeof(struct s_core));
+        // Нужна обработка нехватки памяти
+        // Проблема не решается на уровне ее возникновения
+        // Если не получилось выделить память на такую маленькую структуру, то дальше работать нет смысла
+        // А вообще имеет сделать статическое размещение корневого логера (и его внутренностей), если уж запустилось, то для него точно память будет
+        if (core == 0) {
+            perror("Out of memory");
+            abort();
+        }
         core->log_ = log_new(default_log);
         core->handler_ = error_handler_new(default_error_handler);
     }
@@ -80,6 +111,7 @@ void core_log_message(enum log_level level, const char* format, ...) {
     va_list ap;
     va_start(ap, format);
     core_instance()->log_->log_(level, format, ap);
+    va_end(ap);
 }
 
 void core_handle_error(int err_no, const char* msg) {
