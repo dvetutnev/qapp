@@ -56,6 +56,7 @@ struct s_log* log_new(log_fnc logger) {
 void default_log(enum log_level level, const char* format, va_list ap) {
     fprintf(logging_fd, "[Loglevel: %d] ", level);
     vfprintf(logging_fd, format, ap);
+    fflush(logging_fd);
 }
 
 struct s_error_handler {
