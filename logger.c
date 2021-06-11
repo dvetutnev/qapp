@@ -54,6 +54,7 @@ struct s_log* log_new(log_fnc logger) {
 
 
 void default_log(enum log_level level, const char* format, va_list ap) {
+    fprintf(logging_fd, "[Loglevel: %d] ", level);
     vfprintf(logging_fd, format, ap);
 }
 
@@ -78,7 +79,7 @@ void default_error_handler(int err_no, const char* msg) {
 }
 
 void logging_error_handler(int err_no, const char* msg) {
-    core_log_message(log_level_error, "Message %d, %s", msg);
+    core_log_message(log_level_error, "Message %d, %s", err_no, msg);
 }
 
 // Думаю стоит поменять местами имена handler и handle
